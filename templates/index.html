@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Password Cracker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Password Cracker</h1>
+      <p class="subtitle">Offline dictionary attack against password hashes. For authorized testing only.</p>
+    </header>
+
+    <section class="card">
+      <h2>Target hashes</h2>
+      <textarea id="hashes" rows="6" placeholder="Paste one hash per line&#10;e.g. 5f4dcc3b5aa765d61d8327deb882cf99"></textarea>
+    </section>
+
+    <section class="card">
+      <h2>Wordlist</h2>
+      <div class="row">
+        <label class="inline">
+          <input type="checkbox" id="use-sample" checked>
+          Use built-in sample wordlist
+        </label>
+        <label class="file-btn">
+          Upload wordlist file
+          <input type="file" id="wordlist-file" accept=".txt">
+        </label>
+        <span id="file-name" class="muted"></span>
+      </div>
+      <textarea id="wordlist" rows="6" placeholder="Or paste words here, one per line (used only if sample is unchecked)"></textarea>
+    </section>
+
+    <section class="card">
+      <h2>Options</h2>
+      <div class="row">
+        <label>Hash type
+          <select id="scheme">
+            <option value="">Auto-detect</option>
+            {% for s in schemes %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+          </select>
+        </label>
+      </div>
+      <div class="row rules">
+        <span class="muted">Mangling rules:</span>
+        <label><input type="checkbox" value="lower"> lower</label>
+        <label><input type="checkbox" value="upper"> upper</label>
+        <label><input type="checkbox" value="capitalize"> capitalize</label>
+        <label><input type="checkbox" value="leet"> leet</label>
+        <label><input type="checkbox" value="reverse"> reverse</label>
+        <label><input type="checkbox" value="append"> append digits/years</label>
+      </div>
+    </section>
+
+    <div class="actions">
+      <button id="run" class="primary">Crack</button>
+      <button id="stop" class="danger" disabled>Stop</button>
+    </div>
+
+    <section class="card" id="progress-card" hidden>
+      <h2>Progress</h2>
+      <div class="progress"><div id="bar"></div></div>
+      <p id="progress-text" class="muted">Waiting&hellip;</p>
+    </section>
+
+    <section class="card" id="results-card" hidden>
+      <h2>Results</h2>
+      <table id="results">
+        <thead><tr><th>Plaintext</th><th>Hash</th><th>Scheme</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <footer class="muted">
+      <p>Educational tool. Only crack hashes you own or are authorized to test.</p>
+    </footer>
+  </main>
+
+  <script>
+    const runBtn = document.getElementById('run');
+    const stopBtn = document.getElementById('stop');
+    const fileInput = document.getElementById('wordlist-file');
+    let pollTimer = null;
+    let currentJob = null;
+
+    fileInput.addEventListener('change', () => {
+      document.getElementById('file-name').textContent = fileInput.files[0] ? fileInput.files[0].name : '';
+    });
+
+    runBtn.addEventListener('click', async () => {
+      const hashes = document.getElementById('hashes').value.split('\n').map(s => s.trim()).filter(Boolean);
+      const useSample = document.getElementById('use-sample').checked;
+      let wordlist = document.getElementById('wordlist').value;
+
+      if (!hashes.length) { alert('Paste at least one hash.'); return; }
+      if (!useSample && !wordlist.trim() && !fileInput.files.length) {
+        alert('Provide a wordlist (upload, paste, or use the sample).');
+        return;
+      }
+
+      if (fileInput.files.length) {
+        wordlist = await fileInput.files[0].text();
+      }
+
+      const rules = Array.from(document.querySelectorAll('.rules input:checked')).map(c => c.value);
+      const scheme = document.getElementById('scheme').value;
+
+      runBtn.disabled = true;
+      stopBtn.disabled = false;
+      document.getElementById('progress-card').hidden = false;
+      document.getElementById('results-card').hidden = false;
+      document.querySelector('#results tbody').innerHTML = '';
+      document.getElementById('bar').style.width = '0%';
+
+      const resp = await fetch('/api/crack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hashes, wordlist, use_sample: useSample, rules, scheme })
+      });
+      const data = await resp.json();
+      if (data.error) { alert(data.error); reset(); return; }
+
+      currentJob = data.job_id;
+      pollTimer = setInterval(poll, 750);
+    });
+
+    stopBtn.addEventListener('click', async () => {
+      if (!currentJob) return;
+      await fetch('/api/stop/' + currentJob, { method: 'POST' });
+    });
+
+    async function poll() {
+      if (!currentJob) return;
+      const resp = await fetch('/api/status/' + currentJob);
+      const job = await resp.json();
+      if (job.error) { clearInterval(pollTimer); reset(); return; }
+
+      document.getElementById('progress-text').textContent =
+        `Tried ${job.tried.toLocaleString()} candidates · ${job.found_count} cracked · ${job.elapsed}s`;
+      document.getElementById('bar').style.width =
+        (job.tried > 0 ? Math.min(100, (job.found_count / Math.max(1, job.tried)) * 10000) : 0) + '%';
+
+      const tbody = document.querySelector('#results tbody');
+      tbody.innerHTML = '';
+      for (const r of job.results) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="plaintext">${escapeHtml(r.plaintext)}</td><td class="mono">${escapeHtml(r.hash)}</td><td>${escapeHtml(r.scheme)}</td>`;
+        tbody.appendChild(tr);
+      }
+
+      if (job.done) {
+        clearInterval(pollTimer);
+        const label = { done: 'Finished', stopped: 'Stopped', error: 'Error' }[job.status] || job.status;
+        document.getElementById('progress-text').textContent += ` — ${label}` + (job.message ? `: ${job.message}` : '');
+        resetButtons();
+      }
+    }
+
+    function reset() {
+      clearInterval(pollTimer);
+      resetButtons();
+    }
+
+    function resetButtons() {
+      runBtn.disabled = false;
+      stopBtn.disabled = true;
+      currentJob = null;
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+  </script>
+</body>
+</html>

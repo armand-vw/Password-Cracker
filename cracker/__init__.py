@@ -1,0 +1,1 @@
+"""Password cracker core package."""
