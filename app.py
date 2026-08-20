@@ -2,7 +2,6 @@
 import os
 import tempfile
 import threading
-import time
 import uuid
 
 from flask import Flask, jsonify, render_template, request
@@ -18,8 +17,6 @@ HOST = "0.0.0.0"
 JOBS = {}
 STOP_EVENTS = {}
 JOBS_LOCK = threading.Lock()
-
-PROGRESS_EMIT_INTERVAL = 1.0  # seconds
 
 
 @app.route("/")

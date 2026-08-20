@@ -12,11 +12,12 @@ passwords matter.
 > you own or are authorized to test. Do not use it against systems or data you
 > do not own.
 
-<img width="1917" height="873" alt="Screenshot 1" src="https://github.com/user-attachments/assets/7d7ef24b-c38c-46d8-9b13-2cc0632be736" />
+## Screenshots
 
-<img width="1918" height="881" alt="Screenshot 2" src="https://github.com/user-attachments/assets/bade2078-2bd3-4924-9f38-258cd818e2c6" />
-
-
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/7d7ef24b-c38c-46d8-9b13-2cc0632be736" alt="Cracking UI" width="48%">
+  <img src="https://github.com/user-attachments/assets/bade2078-2bd3-4924-9f38-258cd818e2c6" alt="Results" width="48%">
+</p>
 
 ## Features
 
