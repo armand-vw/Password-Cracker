@@ -12,6 +12,9 @@ passwords matter.
 > you own or are authorized to test. Do not use it against systems or data you
 > do not own.
 
+<img width="1917" height="873" alt="Screenshot 1" src="https://github.com/user-attachments/assets/7d7ef24b-c38c-46d8-9b13-2cc0632be736" />
+
+
 ## Features
 
 - **Dictionary attack** over any wordlist (built-in sample included, or
